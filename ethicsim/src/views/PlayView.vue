@@ -1,178 +1,44 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import { topics, saveResult } from '../data/topics';
-import type { ChoiceOption } from '../types/ethics';
-
-const route = useRoute();
-const router = useRouter();
-
-const topicId = computed(() => route.params.id as string);
-const topic = computed(() => topics.find(t => t.id === topicId.value));
-
-const step = ref(-1);
-const scores = ref<number[]>([]);
-const sliderValue = ref(50);
-const answered = ref<{
-  i?: number;
-  score: number;
-  principle: string;
-  feedback: string;
-} | null>(null);
-
-const pad = (n: number) => String(n).padStart(2, "0");
-
-watch(topicId, () => {
-  step.value = -1;
-  scores.value = [];
-  sliderValue.value = 50;
-  answered.value = null;
-}, { immediate: true });
-
-const currentScenario = computed(() => {
-  if (!topic.value || step.value < 0 || step.value >= topic.value.scenarios.length) return null;
-  return topic.value.scenarios[step.value];
-});
-
-const finalScore = computed(() => {
-  if (!scores.value.length) return 0;
-  return Math.round(scores.value.reduce((a, b) => a + b, 0) / scores.value.length);
-});
-
-const nextTopic = computed(() => {
-  if (!topic.value) return null;
-  return topics[topic.value.index] || null;
-});
-
-const handleChoice = (opt: ChoiceOption, index: number) => {
-  if (answered.value) return;
-  answered.value = {
-    i: index,
-    score: opt.score,
-    principle: opt.principle,
-    feedback: opt.feedback
-  };
-  scores.value.push(opt.score);
-};
-
-const handleLockInSlider = () => {
-  if (!currentScenario.value || currentScenario.value.kind !== 'slider') return;
-  const sc = currentScenario.value;
-  const score = Math.max(0, Math.round(100 - Math.abs(sliderValue.value - sc.ideal) * 1.6));
-  answered.value = {
-    score,
-    principle: sc.principle,
-    feedback: sc.feedback
-  };
-  scores.value.push(score);
-};
-
-const nextStep = () => {
-  step.value += 1;
-  answered.value = null;
-  sliderValue.value = 50;
-  if (topic.value && step.value >= topic.value.scenarios.length) {
-    saveResult(topic.value.id, finalScore.value);
-  }
-};
+import {computed,onUnmounted,ref} from 'vue'; import {saveResult} from '../data/topics';
+type Bin='fix'|'report'|'ignore'|'disclose';
+const stage=ref<'brief'|'catch'|'trace'|'handoff'|'damage'|'result'>('brief');
+const catchScore=ref(0),draggedBug=ref<number|null>(null),placements=ref<Record<number,Bin>>({}),catchFeedback=ref('');
+const bugPool:{name:string;icon:string;clue:string;bin:Bin;why:string}[]=[
+{name:'Paint Moth',icon:'◆',clue:'The button color differs on one old browser. No action or data is affected.',bin:'ignore',why:'Record it as low priority; it does not justify interrupting the incident queue.'},
+{name:'Receipt Beetle',icon:'⬢',clue:'Some transfers create two real charge records when the network retries.',bin:'fix',why:'This active defect creates direct financial harm. It needs containment and a code fix now.'},
+{name:'Keywing',icon:'✦',clue:'Changing an account ID reveals another user’s transfer history.',bin:'report',why:'Treat this as a security incident: preserve evidence and escalate before wider communication.'},
+{name:'Alarm Fly',icon:'●',clue:'The leak is contained; 430 affected users are confirmed and protective steps are ready.',bin:'disclose',why:'Affected users now need a timely, useful notice explaining impact and next steps.'},
+{name:'Tooltip Gnat',icon:'◇',clue:'One help tooltip has a spelling mistake. The control underneath still works.',bin:'ignore',why:'Track it for routine cleanup, but keep the active-response queue focused on user harm.'},
+{name:'Session Wasp',icon:'✶',clue:'A valid session remains active after a user changes their password.',bin:'report',why:'This security weakness needs evidence preserved and immediate escalation for investigation.'},
+{name:'Balance Locust',icon:'⬟',clue:'Account balances are rounded incorrectly after a foreign-currency transfer.',bin:'fix',why:'Incorrect financial records directly affect users and require an urgent verified fix.'},
+{name:'Notice Firefly',icon:'•',clue:'A confirmed outage prevented 900 users from accessing funds; service is restored.',bin:'disclose',why:'Affected users need a clear notice describing impact, restoration, and available support.'},
+{name:'Shadow Ant',icon:'▲',clue:'A scanner reports an unused demo route that is disabled in production.',bin:'ignore',why:'The current evidence shows no reachable production risk. Document it and verify during routine review.'},
+{name:'Token Hornet',icon:'✹',clue:'Password-reset tokens appear unredacted in a shared support log.',bin:'report',why:'Secure the log and escalate because credentials and user access may be exposed.'},
+{name:'Fee Cricket',icon:'◈',clue:'A late-payment fee runs twice when two workers process the same queue item.',bin:'fix',why:'The repeatable processing defect causes financial harm and needs containment plus a durable fix.'},
+{name:'Breach Cicada',icon:'⬣',clue:'Investigation confirms customer statements were exposed and the download link is now disabled.',bin:'disclose',why:'With containment and scope confirmed, customers need timely and actionable communication.'}];
+const bugCount=6+Math.floor(Math.random()*7);
+const receipt=bugPool.find(b=>b.name==='Receipt Beetle')!;
+const shuffled=bugPool.filter(b=>b!==receipt).sort(()=>Math.random()-.5);
+const bugs=[receipt,...shuffled.slice(0,bugCount-1)].sort(()=>Math.random()-.5);
+const bins:{id:Bin;label:string;hint:string}[]=[{id:'fix',label:'FIX',hint:'repair now'},{id:'report',label:'REPORT',hint:'escalate evidence'},{id:'ignore',label:'IGNORE',hint:'no urgent action'},{id:'disclose',label:'DISCLOSE',hint:'notify people'}];
+function startDrag(index:number,event:DragEvent){draggedBug.value=index;event.dataTransfer?.setData('text/plain',String(index));if(event.dataTransfer)event.dataTransfer.effectAllowed='move'}
+function placeBug(bin:Bin,index:number|null){if(index===null||Number.isNaN(index)||placements.value[index])return;const bug=bugs[index]!;placements.value={...placements.value,[index]:bin};if(bin===bug.bin)catchScore.value++;catchFeedback.value=`${bug.name} → ${bin.toUpperCase()} · ${bin===bug.bin?'Good triage.':'Expected '+bug.bin.toUpperCase()+'.'} ${bug.why}`;draggedBug.value=null}
+function dropBug(bin:Bin,event:DragEvent){const raw=event.dataTransfer?.getData('text/plain');placeBug(bin,raw!==undefined&&raw!==''?Number(raw):draggedBug.value)}
+function continueToTrace(){if(Object.keys(placements.value).length===bugs.length)stage.value='trace'}
+const evidence=[{id:'retry',title:'Gateway log',body:'The same transfer appears twice after a timeout. Both calls share one request ID.'},{id:'code',title:'Payment handler',body:'A charge is created before checking whether the request ID was already processed.'},{id:'support',title:'Support queue',body:'Users report duplicate charges, but no unauthorized account access.'}];
+const opened=ref<string[]>([]),traceChoice=ref(''),traceScore=ref(0);function openEvidence(id:string){if(!opened.value.includes(id))opened.value.push(id)}function diagnose(choice:string){if(traceChoice.value)return;traceChoice.value=choice;traceScore.value=choice==='idempotency'?100:choice==='hide'?20:45}
+const damage=ref(1200),users=ref(12),elapsed=ref(0),activeAction=ref(''),remaining=ref(0),completed=ref<string[]>([]),incidentLog=ref<string[]>([]);
+const actions=[{id:'stop',label:'STOP TRANSACTIONS',seconds:3,detail:'Freeze new transfers'},{id:'rollback',label:'ROLLBACK',seconds:8,detail:'Return to stable build'},{id:'notify',label:'NOTIFY USERS',seconds:4,detail:'Show incident notice'},{id:'refund',label:'REFUND',seconds:6,detail:'Reverse duplicate charges'},{id:'record',label:'RECORD INCIDENT',seconds:3,detail:'Preserve logs and timeline'}];
+let damageTimer:number|undefined,actionTimer:number|undefined;
+function startDamage(){stage.value='damage';damage.value=1200+(traceScore.value<80?900:0);damageTimer=window.setInterval(()=>{elapsed.value++;if(!completed.value.includes('stop')){damage.value+=300;users.value+=3}},1000)}
+function runAction(id:string){if(activeAction.value||completed.value.includes(id))return;const a=actions.find(x=>x.id===id)!;activeAction.value=id;remaining.value=a.seconds;incidentLog.value.unshift(`${a.label} started at ${elapsed.value}s`);actionTimer=window.setInterval(()=>{remaining.value--;if(remaining.value<=0){clearInterval(actionTimer);activeAction.value='';completed.value.push(id);incidentLog.value.unshift(`${a.label} complete`);if(completed.value.length===actions.length)finishIncident()}},1000)}
+function finishIncident(){clearInterval(damageTimer);const score=Math.max(20,Math.min(100,100-Math.round(damage.value/100)+catchScore.value*6));saveResult('bug-bounty',score);stage.value='result'}
+const liability=computed(()=>damage.value<=3500?'LOW':damage.value<=6000?'MEDIUM':'HIGH');onUnmounted(()=>{clearInterval(damageTimer);clearInterval(actionTimer)});
 </script>
-
-<template>
-  <div v-if="!topic" class="p-10 text-center">
-    <p>Topic not found.</p>
-    <RouterLink to="/" class="btn-ghost mt-4">Back to modules</RouterLink>
-  </div>
-
-  <div v-else>
-    <!-- Intro State -->
-    <div v-if="step === -1" class="mx-auto max-w-3xl px-6 py-16">
-      <p class="label-mono">Module {{ pad(topic.index) }} · {{ topic.axis }}</p>
-      <h1 class="mt-4 text-3xl font-bold sm:text-4xl">{{ topic.title }}</h1>
-      <p v-for="(p, idx) in topic.intro" :key="idx" class="mt-5 text-sm leading-relaxed text-muted">
-        {{ p }}
-      </p>
-      <button @click="step = 0" class="btn-solid mt-10">Begin scenario</button>
-      <div class="mt-6">
-        <RouterLink to="/" class="label-mono hover:text-lime">Back to modules</RouterLink>
-      </div>
-    </div>
-
-    <!-- Completed State -->
-    <div v-else-if="step >= topic.scenarios.length" class="mx-auto max-w-3xl px-6 py-16">
-      <p class="label-mono">Module {{ pad(topic.index) }} complete</p>
-      <h1 class="mt-4 text-3xl font-bold sm:text-4xl">
-        {{ topic.axis }} score: <span class="text-lime">{{ finalScore }}/100</span>
-      </h1>
-      <p class="mt-5 text-sm leading-relaxed text-muted">
-        Your answers are saved in this browser and feed the ethics radar profile.
-      </p>
-      <div class="mt-10 flex flex-wrap gap-4">
-        <RouterLink v-if="nextTopic" :to="`/play/${nextTopic.id}`" class="btn-solid">
-          Next module: {{ nextTopic.title }}
-        </RouterLink>
-        <RouterLink to="/results" class="btn-ghost">See ethics radar</RouterLink>
-      </div>
-      <div class="mt-6">
-        <RouterLink to="/" class="label-mono hover:text-lime">Back to modules</RouterLink>
-      </div>
-    </div>
-
-    <!-- Scenario Flow -->
-    <div v-else-if="currentScenario" class="mx-auto max-w-3xl px-6 py-14">
-      <div class="flex items-baseline justify-between">
-        <p class="label-mono">{{ topic.title }}</p>
-        <p class="label-mono">Scenario {{ step + 1 }}/{{ topic.scenarios.length }}</p>
-      </div>
-      <div class="mt-3 h-1 bg-[#212b42]">
-        <div class="h-full bg-lime transition-all" :style="{ width: `${(step / topic.scenarios.length) * 100}%` }"></div>
-      </div>
-
-      <h1 class="mt-8 text-2xl font-bold sm:text-3xl">{{ currentScenario.prompt }}</h1>
-      <p class="mt-4 text-sm leading-relaxed text-muted">{{ currentScenario.context }}</p>
-
-      <!-- Choice Option -->
-      <div v-if="currentScenario.kind === 'choice'" class="mt-8 space-y-3">
-        <button
-          v-for="(opt, i) in currentScenario.options"
-          :key="i"
-          @click="handleChoice(opt, i)"
-          class="w-full border border-border bg-card p-4 text-left text-sm transition-colors hover:border-lime"
-          :class="{ 'border-lime': answered && answered.i === i }"
-        >
-          {{ opt.label }}
-        </button>
-      </div>
-
-      <!-- Slider Option -->
-      <div v-else-if="currentScenario.kind === 'slider'" class="mt-8">
-        <input
-          v-model.number="sliderValue"
-          type="range"
-          min="0"
-          max="100"
-          class="w-full"
-          :disabled="!!answered"
-        />
-        <div class="mt-2 flex justify-between">
-          <span class="label-mono">{{ currentScenario.minLabel }}</span>
-          <span class="label-mono">{{ currentScenario.maxLabel }}</span>
-        </div>
-        <button v-if="!answered" @click="handleLockInSlider" class="btn-solid mt-6">Lock in</button>
-      </div>
-
-      <!-- Feedback Panel -->
-      <div v-if="answered" class="panel mt-8 p-6">
-        <p class="label-mono">Principle · {{ answered.principle }}</p>
-        <p class="mt-3 text-sm leading-relaxed">{{ answered.feedback }}</p>
-        <p class="mt-4 font-mono text-sm text-lime">This decision scored {{ answered.score }}/100</p>
-        <button @click="nextStep" class="btn-ghost mt-6">
-          {{ step + 1 >= topic.scenarios.length ? "Finish module" : "Next scenario" }}
-        </button>
-      </div>
-
-      <div class="mt-8">
-        <RouterLink to="/" class="label-mono hover:text-lime">Exit module</RouterLink>
-      </div>
-    </div>
-  </div>
-</template>
+<template><main class="campaign-wrap"><nav class="campaign-progress"><span v-for="(name,i) in ['Bug Intake','Trace & Contain','Damage Control']" :key="name" :class="{active:(stage==='brief'||stage==='catch')?i===0:stage==='trace'?i===1:i===2,done:(stage==='trace'&&i===0)||(stage!=='brief'&&stage!=='catch'&&stage!=='trace'&&i<2)}"><b>0{{i+1}}</b>{{name}}</span></nav>
+<section v-if="stage==='brief'" class="story-brief"><p class="label-mono">BUG CONTROL SHIFT · FRIDAY 16:42</p><h1>One small bug.<br><em>One expensive night.</em></h1><p>You are the incident officer at Northstar Bank. Triage incoming bugs, trace the one that escaped, then take control when it reaches production.</p><div class="mission-strip"><span>ROLE<strong>Incident Officer</strong></span><span>CAMPAIGN<strong>3 connected games</strong></span><span>OBJECTIVE<strong>Minimize user harm</strong></span></div><button class="btn-solid" @click="stage='catch'">Begin shift</button></section>
+<section v-else-if="stage==='catch'" class="game-screen"><header><p class="label-mono">GAME 01 · BUG INTAKE</p><h1>Catch. Drag. Sort.</h1><p>{{bugs.length}} bugs are loose in the intake chamber. Hold and drag each one into the correct response basket.</p></header><div class="bug-chamber multi-bug"><div class="chamber-counter">SORTED {{Object.keys(placements).length}} / {{bugs.length}}</div><button v-for="(bug,i) in bugs" v-show="!placements[i]" :key="bug.name" draggable="true" class="flying-bug" :class="[`flight-${i%4}`,{dragging:draggedBug===i}]" @click="draggedBug=i" @dragstart="startDrag(i,$event)" @dragend="draggedBug=null" :aria-label="`Drag ${bug.name}. ${bug.clue}`"><i>{{bug.icon}}</i><span>{{bug.name}}</span><small>{{bug.clue}}</small></button></div><div class="basket-row"><div v-for="bin in bins" :key="bin.id" class="bug-basket" :class="`basket-${bin.id}`" role="button" tabindex="0" @click="placeBug(bin.id,draggedBug)" @keydown.enter="placeBug(bin.id,draggedBug)" @dragover.prevent @drop.prevent="dropBug(bin.id,$event)"><div class="basket-mouth"><strong>{{bin.label}}</strong><small>{{bin.hint}}</small></div><div class="basket-items"><span v-for="(placed,index) in placements" v-show="placed===bin.id" :key="index">{{bugs[Number(index)]?.icon}} {{bugs[Number(index)]?.name}}</span></div></div></div><div class="drag-help">TIP · Drag a moving bug into a basket. On touch screens, tap the bug and then tap its basket.</div><div v-if="catchFeedback" class="story-feedback"><p>{{catchFeedback}}</p><button v-if="Object.keys(placements).length===bugs.length" class="btn-solid" @click="continueToTrace">Follow the Receipt Beetle</button></div></section>
+<section v-else-if="stage==='trace'" class="game-screen"><header><p class="label-mono">GAME 02 · TRACE &amp; CONTAIN</p><h1>The Receipt Beetle reached production.</h1><p>Users report duplicate bank charges. Inspect all three sources and identify the root cause.</p></header><div class="evidence-grid"><button v-for="e in evidence" :key="e.id" :class="{open:opened.includes(e.id)}" @click="openEvidence(e.id)"><span class="evidence-icon">{{e.id==='retry'?'↻':e.id==='code'?'</>':'!'}}</span><strong>{{e.title}}</strong><p>{{opened.includes(e.id)?e.body:'SEALED · CLICK TO INSPECT'}}</p></button></div><div v-if="opened.length===3" class="diagnosis-panel"><p class="label-mono">SELECT ROOT CAUSE</p><div><button :disabled="!!traceChoice" @click="diagnose('network')">The network is too slow</button><button :disabled="!!traceChoice" @click="diagnose('hide')">The UI displays it twice</button><button :disabled="!!traceChoice" @click="diagnose('idempotency')">Missing duplicate-request protection</button></div></div><div v-if="traceChoice" class="story-feedback"><p>{{traceChoice==='idempotency'?'ROOT CAUSE CONFIRMED — A retry creates a second charge because the handler accepts the same request twice.':'ROOT CAUSE MISSED — The logs show two real charges. The handler needs duplicate-request protection.'}}</p><button class="btn-solid" @click="stage='handoff'">Prepare incident response</button></div></section>
+<section v-else-if="stage==='handoff'" class="incident-alert"><p class="label-mono">LIVE SYSTEM MESSAGE</p><div class="alarm-word">PRODUCTION<br>INCIDENT!</div><p>The duplicate-transaction bug is active. Every second of delay affects more customers.</p><button class="danger-button" @click="startDamage">Enter control room</button></section>
+<section v-else-if="stage==='damage'" class="control-room"><header><div><p class="label-mono red">GAME 03 · DAMAGE CONTROL</p><h1>MINIMIZE THE DAMAGE</h1></div><div class="live-pill">● LIVE · {{elapsed}} SEC</div></header><div class="damage-board"><div><span>DAMAGE</span><strong>${{damage.toLocaleString()}}</strong><small :class="{rising:!completed.includes('stop')}">{{completed.includes('stop')?'TRANSACTIONS FROZEN':'↑ +$300 / SEC'}}</small></div><div><span>USERS AFFECTED</span><strong>{{users}}</strong><small>ACTIVE INCIDENT</small></div><div><span>LIABILITY</span><strong>{{liability}}</strong><small>ESTIMATED EXPOSURE</small></div></div><div class="room-floor"><div class="operator" :class="activeAction?`at-${activeAction}`:''">◆<small>YOU</small></div><button v-for="a in actions" :key="a.id" :class="[`station-${a.id}`,{done:completed.includes(a.id),working:activeAction===a.id}]" :disabled="!!activeAction||completed.includes(a.id)" @click="runAction(a.id)"><strong>{{completed.includes(a.id)?'✓ '+a.label:a.label}}</strong><span>{{activeAction===a.id?remaining+' SEC':a.detail}}</span><small>{{a.seconds}} SEC</small></button></div><div class="incident-console"><span class="label-mono">INCIDENT LOG</span><p v-for="line in incidentLog.slice(0,3)" :key="line">› {{line}}</p><p v-if="!incidentLog.length">› Choose your first action. Damage continues while you work.</p></div></section>
+<section v-else class="incident-result"><p class="label-mono">INCIDENT CLOSED · FINAL REPORT</p><h1>{{liability==='LOW'?'Controlled under pressure.':liability==='MEDIUM'?'Contained, with consequences.':'The delay became the damage.'}}</h1><div class="final-metrics"><span>Users affected<strong>{{users}}</strong></span><span>Financial damage<strong>${{damage.toLocaleString()}}</strong></span><span>Response time<strong>{{elapsed}} sec</strong></span><span>Liability<strong>{{liability}}</strong></span></div><div class="lesson"><h2>Liability grows after the bug is known.</h2><p>The defect caused the incident, but response choices determined its scale. Contain harm, preserve evidence, communicate, restore users, and record what must change.</p></div><div class="result-actions"><RouterLink to="/results" class="btn-solid">View responsibility profile</RouterLink><RouterLink to="/" class="btn-ghost">Return to briefing</RouterLink></div></section></main></template>

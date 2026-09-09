@@ -5,7 +5,7 @@
         Ethic<span class="text-lime">Sim</span>
       </RouterLink>
       <RouterLink to="/results" class="label-mono hover:text-lime">
-        Ethics radar
+        Response profile
       </RouterLink>
     </div>
   </header>
