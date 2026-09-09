@@ -1,11 +1,17 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import Navbar from './components/Navbar.vue';
+import Footer from './components/Footer.vue';
+import { RouterView } from 'vue-router';
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <div class="min-h-screen flex flex-col justify-between">
+    <div>
+      <Navbar />
+      <main>
+        <RouterView />
+      </main>
+    </div>
+    <Footer />
+  </div>
 </template>
-
-<style scoped></style>
