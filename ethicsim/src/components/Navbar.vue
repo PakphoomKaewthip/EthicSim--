@@ -1,12 +1,7 @@
 <template>
-  <header class="border-b border-border">
-    <div class="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-      <RouterLink to="/" class="font-display text-lg font-bold tracking-tight">
-        Ethic<span class="text-lime">Sim</span>
-      </RouterLink>
-      <RouterLink to="/results" class="label-mono hover:text-lime">
-        Response profile
-      </RouterLink>
-    </div>
+  <header class="site-nav">
+    <RouterLink to="/" class="brand-lockup" aria-label="EthicSim home"><span class="brand-face">•‿•</span><strong>Ethic<span>Sim</span></strong></RouterLink>
+    <nav aria-label="Main navigation"><RouterLink to="/">Campaign</RouterLink><RouterLink to="/results">Response profile</RouterLink></nav>
+    <RouterLink to="/play/bug-bounty" class="nav-play" aria-label="Start playing"><span>Play now</span><i aria-hidden="true">↗</i></RouterLink>
   </header>
 </template>
